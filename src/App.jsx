@@ -131,6 +131,7 @@ const ESTADO_MAP = {
   "PENDIENTE DE DIAGNÓSTICO": { principal: "Diagnostico", subestado: "Pendiente de diagnóstico", orden: 0 },
   "DIAGNÓSTICO":              { principal: "Diagnostico", subestado: "En diagnóstico",            orden: 1 },
   "ESPERA DE REPUESTO":       { principal: "EnTrabajo",   subestado: "Espera de repuesto",        orden: 2 },
+  "RECALL":                   { principal: "EnTrabajo",   subestado: "Espera de repuesto",        orden: 2 }, // ← NUEVO: RECALL se trata igual que ESPERA DE REPUESTO
   "DISPONIBLE PARA TRABAJO":  { principal: "EnTrabajo",   subestado: "Disponible para trabajo",   orden: 3 },
   "TRABAJANDO":               { principal: "EnTrabajo",   subestado: "Trabajando",                orden: 4 },
   "PRUEBA DE RUTA":           { principal: "EnTrabajo",   subestado: "Prueba de ruta",            orden: 5 },
@@ -408,7 +409,7 @@ function ModalComentario({ caso, onSave, onClose, defaultUser = "" }) {
       </div>
       <label style={{ fontSize: 13, color: "#666", display: "block", marginBottom: 4 }}>Estado</label>
       <select style={{ ...inputStyle, marginBottom: 4 }} value={estadoComentario} onChange={e => setEstadoComentario(e.target.value)}>
-        {Object.keys(ESTADO_MAP).filter(k => k !== "PENDIENTE").map(k => <option key={k} value={k}>{ESTADO_MAP[k].subestado}</option>)}
+        {Object.keys(ESTADO_MAP).filter(k => k !== "PENDIENTE" && k !== "RECALL").map(k => <option key={k} value={k}>{ESTADO_MAP[k].subestado}</option>)}
       </select>
       <label style={{ fontSize: 13, color: "#666", display: "block", marginBottom: 4, marginTop: 8 }}>Tu nombre</label>
       <input style={inputStyle} value={creadoPor} onChange={e => setCreadoPor(e.target.value)} placeholder="Ej: Juan Pérez" />
@@ -489,7 +490,7 @@ function ModalNecesitoContacto({ caso, onClose }) {
     try {
       const payload = { numero_caso: caso.numero_caso, patente: caso.patente, mensaje: mensaje.trim() || null, estado: "pendiente", created_at: new Date().toISOString() };
       await crearSolicitudContacto(payload);
-      await notificarSlack(payload); // busca correo + Slack ID automáticamente
+      await notificarSlack(payload);
       setPaso(2);
     } catch (e) { setErr("No se pudo enviar. Intenta de nuevo."); } finally { setSaving(false); }
   }
@@ -664,7 +665,7 @@ function TabPendientesContacto({ solicitudes, onMarcarContactado, onRefresh, loa
 function ProgresoCliente({ historico, comentarios = [] }) {
   const casoActual = historico[historico.length - 1];
   const ordenActual = getOrden(casoActual?.estado_operativo?.toUpperCase().trim());
-  const nk = k => k === "PENDIENTE" ? "PENDIENTE DE DIAGNÓSTICO" : k;
+  const nk = k => k === "PENDIENTE" ? "PENDIENTE DE DIAGNÓSTICO" : k === "RECALL" ? "ESPERA DE REPUESTO" : k;
   const filasPorEstado = {};
   for (const fila of historico) { const k = nk(fila.estado_operativo?.toUpperCase().trim()); if (!k) continue; if (!filasPorEstado[k]) filasPorEstado[k] = []; filasPorEstado[k].push(fila); }
   function getFechas(k) {
