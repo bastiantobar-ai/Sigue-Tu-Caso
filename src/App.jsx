@@ -227,10 +227,14 @@ function filtrarProcesoReciente(todos) {
   const proceso = todos.filter(f => f.id_sistema === maxId);
   const validos = proceso.filter(f => f.fecha_ingreso || f.fecha_listo);
   const base    = validos.length > 0 ? validos : proceso;
+  const estadoOrden = e => ESTADO_MAP[e?.toUpperCase().trim()]?.orden ?? -1;
   const ordenado = [...base].sort((a, b) => {
     if (!a.fecha_ingreso && !b.fecha_ingreso) return 0;
     if (!a.fecha_ingreso) return -1; if (!b.fecha_ingreso) return 1;
-    return new Date(a.fecha_ingreso + "T" + (a.hora_ingreso || "00:00:00")) - new Date(b.fecha_ingreso + "T" + (b.hora_ingreso || "00:00:00"));
+    const dtDiff = new Date(a.fecha_ingreso + "T" + (a.hora_ingreso || "00:00:00")) -
+                   new Date(b.fecha_ingreso + "T" + (b.hora_ingreso || "00:00:00"));
+    if (dtDiff !== 0) return dtDiff;
+    return estadoOrden(a.estado_operativo) - estadoOrden(b.estado_operativo);
   });
   const ultimo = ordenado[ordenado.length - 1];
   return ordenado.filter(f => {
@@ -822,7 +826,8 @@ function PortalCliente({ onVolver, modoInterno = false }) {
         if (!modoInterno) {
           const tipo = /^\d+$/.test(q) ? "numero_caso" : "patente";
           await registrarConsulta(q, tipo, casoReciente.numero_caso, casoReciente.patente);
-          if (hist[hist.length-1]?.estado_operativo?.toUpperCase().trim() === "LISTO") setTimeout(() => setShowFeedback(true), 6000);
+          const estadoFinal = hist[hist.length-1]?.estado_operativo?.toUpperCase().trim();
+          if (estadoFinal === "LISTO" || estadoFinal === "ENTREGADO A CLIENTE") setTimeout(() => setShowFeedback(true), 6000);
         }
       }
     } catch (e) { setErr("Error al buscar: " + e.message); } finally { setLoading(false); }
