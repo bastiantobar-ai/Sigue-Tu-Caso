@@ -214,6 +214,17 @@ async function registrarConsulta(busqueda, tipo, numero_caso, patente) {
   try { await supabaseFetch("consultas_cliente", { method: "POST", body: JSON.stringify({ busqueda, tipo, numero_caso: numero_caso || null, patente: patente || null, created_at: new Date().toISOString() }) }); }
   catch (e) { console.warn("No se pudo registrar consulta:", e.message); }
 }
+async function getConteoConsultas(numero_caso) {
+  try {
+    const r = await supabaseFetch(`consultas_cliente?numero_caso=eq.${encodeURIComponent(numero_caso)}&select=id`);
+    if (!r.ok) return 0;
+    const data = await r.json();
+    return data.length;
+  } catch (e) {
+    console.warn("No se pudo contar consultas:", e.message);
+    return 0;
+  }
+}
 async function crearSolicitudContacto(data) { const r = await supabaseFetch("solicitudes_contacto", { method: "POST", body: JSON.stringify(data) }); if (!r.ok) throw new Error(await r.text()); return r.json(); }
 async function getSolicitudesPendientes() { const r = await supabaseFetch("solicitudes_contacto?estado=eq.pendiente&order=created_at.asc"); if (!r.ok) throw new Error(await r.text()); return r.json(); }
 async function marcarContactado(id, contactado_por) {
@@ -826,8 +837,12 @@ function PortalCliente({ onVolver, modoInterno = false }) {
         if (!modoInterno) {
           const tipo = /^\d+$/.test(q) ? "numero_caso" : "patente";
           await registrarConsulta(q, tipo, casoReciente.numero_caso, casoReciente.patente);
+          const conteo = await getConteoConsultas(casoReciente.numero_caso);
           const estadoFinal = hist[hist.length-1]?.estado_operativo?.toUpperCase().trim();
-          if (estadoFinal === "LISTO" || estadoFinal === "ENTREGADO A CLIENTE") setTimeout(() => setShowFeedback(true), 6000);
+          const esListoOEntregado = estadoFinal === "LISTO" || estadoFinal === "ENTREGADO A CLIENTE";
+          if (esListoOEntregado || conteo === 3 || conteo === 30) {
+            setTimeout(() => setShowFeedback(true), 4000);
+          }
         }
       }
     } catch (e) { setErr("Error al buscar: " + e.message); } finally { setLoading(false); }
