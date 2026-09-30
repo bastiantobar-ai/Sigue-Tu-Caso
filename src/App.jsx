@@ -131,9 +131,10 @@ const ESTADO_MAP = {
   "PENDIENTE DE DIAGNÓSTICO": { principal: "Diagnostico", subestado: "Pendiente de diagnóstico", orden: 0 },
   "DIAGNÓSTICO":              { principal: "Diagnostico", subestado: "En diagnóstico",            orden: 1 },
   "ESPERA DE REPUESTO":       { principal: "EnTrabajo",   subestado: "Espera de repuesto",        orden: 2 },
-  "RECALL":                   { principal: "EnTrabajo",   subestado: "Espera de repuesto",        orden: 2 }, // ← NUEVO: RECALL se trata igual que ESPERA DE REPUESTO
+  "RECALL":                   { principal: "EnTrabajo",   subestado: "Recall en proceso",         orden: 2 }, // mismo paso que ESPERA DE REPUESTO, texto propio
   "DISPONIBLE PARA TRABAJO":  { principal: "EnTrabajo",   subestado: "Disponible para trabajo",   orden: 3 },
   "TRABAJANDO":               { principal: "EnTrabajo",   subestado: "Trabajando",                orden: 4 },
+  "TALLER EXTERNO":           { principal: "EnTrabajo",   subestado: "En taller externo",         orden: 4 }, // mismo paso que TRABAJANDO, texto propio
   "PRUEBA DE RUTA":           { principal: "EnTrabajo",   subestado: "Prueba de ruta",            orden: 5 },
   "LISTO":                    { principal: "Listo",       subestado: "Listo para entregar",       orden: 6 },
   "ENTREGADO A CLIENTE":      { principal: "Listo",       subestado: "Entregado a cliente",       orden: 7 },
@@ -424,7 +425,7 @@ function ModalComentario({ caso, onSave, onClose, defaultUser = "" }) {
       </div>
       <label style={{ fontSize: 13, color: "#666", display: "block", marginBottom: 4 }}>Estado</label>
       <select style={{ ...inputStyle, marginBottom: 4 }} value={estadoComentario} onChange={e => setEstadoComentario(e.target.value)}>
-        {Object.keys(ESTADO_MAP).filter(k => k !== "PENDIENTE" && k !== "RECALL").map(k => <option key={k} value={k}>{ESTADO_MAP[k].subestado}</option>)}
+        {Object.keys(ESTADO_MAP).filter(k => k !== "PENDIENTE" && k !== "RECALL" && k !== "TALLER EXTERNO").map(k => <option key={k} value={k}>{ESTADO_MAP[k].subestado}</option>)}
       </select>
       <label style={{ fontSize: 13, color: "#666", display: "block", marginBottom: 4, marginTop: 8 }}>Tu nombre</label>
       <input style={inputStyle} value={creadoPor} onChange={e => setCreadoPor(e.target.value)} placeholder="Ej: Juan Pérez" />
@@ -680,7 +681,8 @@ function TabPendientesContacto({ solicitudes, onMarcarContactado, onRefresh, loa
 function ProgresoCliente({ historico, comentarios = [] }) {
   const casoActual = historico[historico.length - 1];
   const ordenActual = getOrden(casoActual?.estado_operativo?.toUpperCase().trim());
-  const nk = k => k === "PENDIENTE" ? "PENDIENTE DE DIAGNÓSTICO" : k === "RECALL" ? "ESPERA DE REPUESTO" : k;
+  const estadoActualRaw = casoActual?.estado_operativo?.toUpperCase().trim();
+  const nk = k => k === "PENDIENTE" ? "PENDIENTE DE DIAGNÓSTICO" : k === "RECALL" ? "ESPERA DE REPUESTO" : k === "TALLER EXTERNO" ? "TRABAJANDO" : k;
   const filasPorEstado = {};
   for (const fila of historico) { const k = nk(fila.estado_operativo?.toUpperCase().trim()); if (!k) continue; if (!filasPorEstado[k]) filasPorEstado[k] = []; filasPorEstado[k].push(fila); }
   function getFechas(k) {
@@ -713,6 +715,13 @@ function ProgresoCliente({ historico, comentarios = [] }) {
             <div style={{ display: "flex", flexDirection: "column" }}>
               {grupo.subestados.map((s, si) => {
                 const ordenS = getOrden(s.key); const completado = ordenS < ordenActual; const activo = ordenS === ordenActual;
+                // Recall/Taller externo comparten paso (orden) con Espera de
+                // repuesto/Trabajando pero deben mostrar su propio texto
+                // mientras están activos — el resto del tiempo se ven como
+                // el paso normal.
+                const labelMostrado = activo && estadoActualRaw === "RECALL" && s.key === "ESPERA DE REPUESTO" ? "Recall en proceso"
+                  : activo && estadoActualRaw === "TALLER EXTERNO" && s.key === "TRABAJANDO" ? "En taller externo"
+                  : s.label;
                 const key = nk(s.key); const existeEnHist = !!filasPorEstado[key];
                 const tieneAbierta = existeEnHist && filasPorEstado[key].some(f => !f.fecha_listo);
                 const llegóAListo = ordenActual >= 6;
@@ -730,7 +739,7 @@ function ProgresoCliente({ historico, comentarios = [] }) {
                     </div>
                     <div style={{ flex: 1, paddingBottom: isLast ? 4 : 12, paddingLeft: 10, paddingTop: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 14, fontWeight: activo ? 600 : completado ? 500 : 400, color: activo ? "#1a1a1a" : completado ? "#555" : "#bbb", flex: 1 }}>{s.label}</span>
+                        <span style={{ fontSize: 14, fontWeight: activo ? 600 : completado ? 500 : 400, color: activo ? "#1a1a1a" : completado ? "#555" : "#bbb", flex: 1 }}>{labelMostrado}</span>
                         {activo    && <span style={{ background: cfg.color, color: "#fff", borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>Estado actual</span>}
                         {completado && <span style={{ background: cfg.bg, color: cfg.text, border: `1px solid ${cfg.border}`, borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 500 }}>Completado ✓</span>}
                         {retroced  && <span style={{ background: "#f5f5f5", color: "#999", border: "1px solid #e8e8e8", borderRadius: 20, padding: "2px 10px", fontSize: 11 }}>↩ Retrocedido</span>}
@@ -929,6 +938,11 @@ function PortalCliente({ onVolver, modoInterno = false }) {
             <div style={{ background: KAVAK_BLUE_LIGHT, border: `1px solid ${KAVAK_BLUE}20`, borderLeft: `4px solid ${KAVAK_BLUE}`, borderRadius: "0 10px 10px 0", padding: "12px 14px", marginTop: 14 }}>
               <p style={{ margin: "0 0 4px", fontSize: 12, color: KAVAK_BLUE, fontWeight: 600 }}>📋 Solicitud inicial</p>
               <p style={{ margin: 0, fontSize: 14, color: "#333" }}>{comentarioInicial}</p>
+            </div>
+          )}
+          {caso.auto_reemplazo_patente && (
+            <div style={{ background: "#FAEEDA", border: "1px solid #EF9F2730", borderLeft: "4px solid #EF9F27", borderRadius: "0 10px 10px 0", padding: "12px 14px", marginTop: 14 }}>
+              <p style={{ margin: 0, fontSize: 14, color: "#633806" }}>🚙 Tienes un vehículo de reemplazo asignado</p>
             </div>
           )}
           <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 16, marginTop: 16 }}>
