@@ -694,20 +694,9 @@ function ProgresoCliente({ historico, comentarios = [] }) {
   }
   const comentMap = {};
   for (const c of comentarios) { const k = c.estado?.toUpperCase().trim(); if (k) { if (!comentMap[k]) comentMap[k] = []; comentMap[k].push(c); } }
-  // RECALL y TALLER EXTERNO son pasos OPCIONALES (no todo caso pasa por
-  // ahí) — a diferencia del resto de SUBESTADOS_ORDEN, que es una secuencia
-  // fija que todo caso recorre. Si siempre se mostraran, un caso que nunca
-  // tuvo recall/taller externo igual los vería marcados "Completado ✓" en
-  // cuanto avanzara más allá de su posición numérica, lo cual sería falso.
-  // Por eso se ocultan salvo que el caso realmente haya pasado por ahí
-  // (existeEnHist) o esté ahí ahora mismo (activo).
-  const esOpcionalVisible_ = s => {
-    if (s.key !== "RECALL" && s.key !== "TALLER EXTERNO") return true;
-    return !!filasPorEstado[nk(s.key)] || getOrden(s.key) === ordenActual;
-  };
   const grupos = [
     { key: "Diagnostico", label: "Diagnóstico", subestados: SUBESTADOS_ORDEN.filter(s => s.principal === "Diagnostico") },
-    { key: "EnTrabajo",   label: "En Trabajo",  subestados: SUBESTADOS_ORDEN.filter(s => s.principal === "EnTrabajo" && esOpcionalVisible_(s)) },
+    { key: "EnTrabajo",   label: "En Trabajo",  subestados: SUBESTADOS_ORDEN.filter(s => s.principal === "EnTrabajo")   },
     { key: "Listo",       label: "Listo",       subestados: SUBESTADOS_ORDEN.filter(s => s.principal === "Listo")       },
   ];
   const DC = { Diagnostico: "#E24B4A", EnTrabajo: "#EF9F27", Listo: "#1D9E75" };
