@@ -131,10 +131,10 @@ const ESTADO_MAP = {
   "PENDIENTE DE DIAGNÓSTICO": { principal: "Diagnostico", subestado: "Pendiente de diagnóstico", orden: 0 },
   "DIAGNÓSTICO":              { principal: "Diagnostico", subestado: "En diagnóstico",            orden: 1 },
   "ESPERA DE REPUESTO":       { principal: "EnTrabajo",   subestado: "Espera de repuesto",        orden: 2 },
-  "RECALL":                   { principal: "EnTrabajo",   subestado: "Recall en proceso",         orden: 2 }, // mismo paso que ESPERA DE REPUESTO, texto propio
+  "RECALL":                   { principal: "EnTrabajo",   subestado: "Recall en proceso",         orden: 2.5 }, // paso propio, justo después de Espera de repuesto
   "DISPONIBLE PARA TRABAJO":  { principal: "EnTrabajo",   subestado: "Disponible para trabajo",   orden: 3 },
   "TRABAJANDO":               { principal: "EnTrabajo",   subestado: "Trabajando",                orden: 4 },
-  "TALLER EXTERNO":           { principal: "EnTrabajo",   subestado: "En taller externo",         orden: 4 }, // mismo paso que TRABAJANDO, texto propio
+  "TALLER EXTERNO":           { principal: "EnTrabajo",   subestado: "En taller externo",         orden: 4.5 }, // paso propio, justo después de Trabajando
   "PRUEBA DE RUTA":           { principal: "EnTrabajo",   subestado: "Prueba de ruta",            orden: 5 },
   "LISTO":                    { principal: "Listo",       subestado: "Listo para entregar",       orden: 6 },
   "ENTREGADO A CLIENTE":      { principal: "Listo",       subestado: "Entregado a cliente",       orden: 7 },
@@ -144,8 +144,10 @@ const SUBESTADOS_ORDEN = [
   { key: "PENDIENTE DE DIAGNÓSTICO", label: "Pendiente de diagnóstico", principal: "Diagnostico" },
   { key: "DIAGNÓSTICO",              label: "En diagnóstico",           principal: "Diagnostico" },
   { key: "ESPERA DE REPUESTO",       label: "Espera de repuesto",       principal: "EnTrabajo"   },
+  { key: "RECALL",                   label: "Recall en proceso",        principal: "EnTrabajo"   },
   { key: "DISPONIBLE PARA TRABAJO",  label: "Disponible para trabajo",  principal: "EnTrabajo"   },
   { key: "TRABAJANDO",               label: "Trabajando",               principal: "EnTrabajo"   },
+  { key: "TALLER EXTERNO",           label: "En taller externo",        principal: "EnTrabajo"   },
   { key: "PRUEBA DE RUTA",           label: "Prueba de ruta",           principal: "EnTrabajo"   },
   { key: "LISTO",                    label: "Listo para entregar",      principal: "Listo"       },
   { key: "ENTREGADO A CLIENTE",      label: "Entregado a cliente",      principal: "Listo"       },
@@ -425,7 +427,7 @@ function ModalComentario({ caso, onSave, onClose, defaultUser = "" }) {
       </div>
       <label style={{ fontSize: 13, color: "#666", display: "block", marginBottom: 4 }}>Estado</label>
       <select style={{ ...inputStyle, marginBottom: 4 }} value={estadoComentario} onChange={e => setEstadoComentario(e.target.value)}>
-        {Object.keys(ESTADO_MAP).filter(k => k !== "PENDIENTE" && k !== "RECALL" && k !== "TALLER EXTERNO").map(k => <option key={k} value={k}>{ESTADO_MAP[k].subestado}</option>)}
+        {Object.keys(ESTADO_MAP).filter(k => k !== "PENDIENTE").map(k => <option key={k} value={k}>{ESTADO_MAP[k].subestado}</option>)}
       </select>
       <label style={{ fontSize: 13, color: "#666", display: "block", marginBottom: 4, marginTop: 8 }}>Tu nombre</label>
       <input style={inputStyle} value={creadoPor} onChange={e => setCreadoPor(e.target.value)} placeholder="Ej: Juan Pérez" />
@@ -681,8 +683,7 @@ function TabPendientesContacto({ solicitudes, onMarcarContactado, onRefresh, loa
 function ProgresoCliente({ historico, comentarios = [] }) {
   const casoActual = historico[historico.length - 1];
   const ordenActual = getOrden(casoActual?.estado_operativo?.toUpperCase().trim());
-  const estadoActualRaw = casoActual?.estado_operativo?.toUpperCase().trim();
-  const nk = k => k === "PENDIENTE" ? "PENDIENTE DE DIAGNÓSTICO" : k === "RECALL" ? "ESPERA DE REPUESTO" : k === "TALLER EXTERNO" ? "TRABAJANDO" : k;
+  const nk = k => k === "PENDIENTE" ? "PENDIENTE DE DIAGNÓSTICO" : k;
   const filasPorEstado = {};
   for (const fila of historico) { const k = nk(fila.estado_operativo?.toUpperCase().trim()); if (!k) continue; if (!filasPorEstado[k]) filasPorEstado[k] = []; filasPorEstado[k].push(fila); }
   function getFechas(k) {
@@ -693,9 +694,20 @@ function ProgresoCliente({ historico, comentarios = [] }) {
   }
   const comentMap = {};
   for (const c of comentarios) { const k = c.estado?.toUpperCase().trim(); if (k) { if (!comentMap[k]) comentMap[k] = []; comentMap[k].push(c); } }
+  // RECALL y TALLER EXTERNO son pasos OPCIONALES (no todo caso pasa por
+  // ahí) — a diferencia del resto de SUBESTADOS_ORDEN, que es una secuencia
+  // fija que todo caso recorre. Si siempre se mostraran, un caso que nunca
+  // tuvo recall/taller externo igual los vería marcados "Completado ✓" en
+  // cuanto avanzara más allá de su posición numérica, lo cual sería falso.
+  // Por eso se ocultan salvo que el caso realmente haya pasado por ahí
+  // (existeEnHist) o esté ahí ahora mismo (activo).
+  const esOpcionalVisible_ = s => {
+    if (s.key !== "RECALL" && s.key !== "TALLER EXTERNO") return true;
+    return !!filasPorEstado[nk(s.key)] || getOrden(s.key) === ordenActual;
+  };
   const grupos = [
     { key: "Diagnostico", label: "Diagnóstico", subestados: SUBESTADOS_ORDEN.filter(s => s.principal === "Diagnostico") },
-    { key: "EnTrabajo",   label: "En Trabajo",  subestados: SUBESTADOS_ORDEN.filter(s => s.principal === "EnTrabajo")   },
+    { key: "EnTrabajo",   label: "En Trabajo",  subestados: SUBESTADOS_ORDEN.filter(s => s.principal === "EnTrabajo" && esOpcionalVisible_(s)) },
     { key: "Listo",       label: "Listo",       subestados: SUBESTADOS_ORDEN.filter(s => s.principal === "Listo")       },
   ];
   const DC = { Diagnostico: "#E24B4A", EnTrabajo: "#EF9F27", Listo: "#1D9E75" };
@@ -715,13 +727,6 @@ function ProgresoCliente({ historico, comentarios = [] }) {
             <div style={{ display: "flex", flexDirection: "column" }}>
               {grupo.subestados.map((s, si) => {
                 const ordenS = getOrden(s.key); const completado = ordenS < ordenActual; const activo = ordenS === ordenActual;
-                // Recall/Taller externo comparten paso (orden) con Espera de
-                // repuesto/Trabajando pero deben mostrar su propio texto
-                // mientras están activos — el resto del tiempo se ven como
-                // el paso normal.
-                const labelMostrado = activo && estadoActualRaw === "RECALL" && s.key === "ESPERA DE REPUESTO" ? "Recall en proceso"
-                  : activo && estadoActualRaw === "TALLER EXTERNO" && s.key === "TRABAJANDO" ? "En taller externo"
-                  : s.label;
                 const key = nk(s.key); const existeEnHist = !!filasPorEstado[key];
                 const tieneAbierta = existeEnHist && filasPorEstado[key].some(f => !f.fecha_listo);
                 const llegóAListo = ordenActual >= 6;
@@ -739,7 +744,7 @@ function ProgresoCliente({ historico, comentarios = [] }) {
                     </div>
                     <div style={{ flex: 1, paddingBottom: isLast ? 4 : 12, paddingLeft: 10, paddingTop: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 14, fontWeight: activo ? 600 : completado ? 500 : 400, color: activo ? "#1a1a1a" : completado ? "#555" : "#bbb", flex: 1 }}>{labelMostrado}</span>
+                        <span style={{ fontSize: 14, fontWeight: activo ? 600 : completado ? 500 : 400, color: activo ? "#1a1a1a" : completado ? "#555" : "#bbb", flex: 1 }}>{s.label}</span>
                         {activo    && <span style={{ background: cfg.color, color: "#fff", borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>Estado actual</span>}
                         {completado && <span style={{ background: cfg.bg, color: cfg.text, border: `1px solid ${cfg.border}`, borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 500 }}>Completado ✓</span>}
                         {retroced  && <span style={{ background: "#f5f5f5", color: "#999", border: "1px solid #e8e8e8", borderRadius: 20, padding: "2px 10px", fontSize: 11 }}>↩ Retrocedido</span>}
