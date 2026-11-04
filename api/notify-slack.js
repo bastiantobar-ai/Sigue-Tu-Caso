@@ -60,16 +60,18 @@ export default async function handler(req, res) {
      * RESOLVER RESPONSABLE
      *************************************************/
 
-    const slackId = correo
-      ? SLACK_USER_MAP[
-          correo.trim().toLowerCase()
-        ]
-      : null;
+    // 2026-11-04: el "correo" que llega puede ser el de un CLIENTE (bbdd_cc.correo trae correos externos). Solo se
+    // etiqueta / nombra como responsable a gente de Kavak: si el correo no es @kavak.com no se muestra (no se
+    // expone el correo de un cliente en el canal y no se lo pone como "responsable").
+    const correoLimpio = correo ? correo.trim().toLowerCase() : "";
+    const esKavak = /@kavak\.com$/.test(correoLimpio);
+
+    const slackId = esKavak ? SLACK_USER_MAP[correoLimpio] : null;
 
     const mencion = slackId
       ? `<@${slackId}>`
-      : correo
-      ? `_${correo}_`
+      : esKavak
+      ? `_${correoLimpio}_`
       : "_sin asignar_";
 
 
