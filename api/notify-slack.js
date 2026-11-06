@@ -66,7 +66,23 @@ export default async function handler(req, res) {
     const correoLimpio = correo ? correo.trim().toLowerCase() : "";
     const esKavak = /@kavak\.com$/.test(correoLimpio);
 
-    const slackId = esKavak ? SLACK_USER_MAP[correoLimpio] : null;
+    let slackId = esKavak ? SLACK_USER_MAP[correoLimpio] : null;
+
+    // 2026-11-06: si el KAM no está en el mapa fijo, se lo busca en Slack por su correo (users.lookupByEmail; el bot
+    // necesita el permiso users:read.email — si no lo tiene o no lo encuentra, se sigue sin etiquetar, sin romper nada).
+    if (esKavak && !slackId) {
+      try {
+        const rUser = await fetch(
+          "https://slack.com/api/users.lookupByEmail?email=" + encodeURIComponent(correoLimpio),
+          { headers: { Authorization: `Bearer ${SLACK_TOKEN}` } }
+        );
+        const dUser = await rUser.json();
+        if (dUser.ok && dUser.user && dUser.user.id) slackId = dUser.user.id;
+        else console.warn("notify-slack: lookupByEmail no resolvió " + correoLimpio + ": " + (dUser.error || "sin usuario"));
+      } catch (eLookup) {
+        console.warn("notify-slack: lookupByEmail falló: " + eLookup.message);
+      }
+    }
 
     const mencion = slackId
       ? `<@${slackId}>`
