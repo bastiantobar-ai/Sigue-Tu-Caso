@@ -5,6 +5,8 @@ const SLACK_USER_MAP = {
   "hector.sanchezmunoz@kavak.com": "U098RKBM2NP",
   "dustin.reyes@kavak.com":        "U0ALFB5T2A3",
   "hugo.tapia1@kavak.com":         "U05UFQT796U",
+  "felipe.lungenstrass@kavak.com":          "U06AN0ET1TM",
+  "francisco.mirandadinamarca@kavak.com":   "U0BFCKGL5RN",
 };
 
 export default async function handler(req, res) {
